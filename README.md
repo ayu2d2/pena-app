@@ -1,36 +1,109 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PenaApp 🐬
 
-## Getting Started
+上智大学KpopSDGsペナルティキック研究会ドルフィンズの公式アプリです。
 
-First, run the development server:
+## 📖 概要
+
+PenaAppは、サークルメンバー同士のコミュニケーション促進、イベント参加管理、ゲーミフィケーション機能を通じて、サークル活動をより活発で楽しいものにするアプリです。
+
+## ✨ 主要機能
+
+- **🎯 イベント管理**: 練習・イベントの参加申込とカレンダー表示
+- **👥 メンバー交流**: 投稿・写真共有・コメント機能
+- **🏆 ゲーミフィケーション**: ポイント獲得、バッジ収集、ランキング
+- **🎵 専門機能**: K-pop、ペナルティキック、SDGs活動の記録
+
+## 🛠 技術スタック
+
+- **Frontend**: Next.js 15 + TypeScript
+- **Styling**: Tailwind CSS
+- **Database**: Supabase (PostgreSQL)
+- **Authentication**: Supabase Auth
+- **Deployment**: Vercel
+
+## 🚀 開発環境のセットアップ
+
+### 前提条件
+- Node.js 18以上
+- npm または yarn
+
+### インストール
+
+1. リポジトリをクローン:
+```bash
+git clone <repository-url>
+cd pena-app-develop
+```
+
+2. 依存関係をインストール:
+```bash
+npm install
+```
+
+3. 環境変数を設定:
+```bash
+cp .env.local.example .env.local
+# .env.localファイルを編集してSupabaseの設定を追加
+```
+
+4. 開発サーバーを起動:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+5. ブラウザで [http://localhost:3000](http://localhost:3000) を開く
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📁 プロジェクト構造
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+├── app/                 # Next.js App Router
+├── components/          # React コンポーネント
+│   ├── ui/             # 基本UIコンポーネント
+│   ├── features/       # 機能別コンポーネント
+│   └── layout/         # レイアウトコンポーネント
+├── lib/                # ユーティリティ関数
+│   └── supabase/       # Supabase設定
+├── types/              # TypeScript型定義
+└── hooks/              # カスタムReactフック
+```
 
-## Learn More
+## 🎨 デザインシステム
 
-To learn more about Next.js, take a look at the following resources:
+- **Primary Color**: #0080FF (ドルフィンブルー)
+- **Accent Color**: #FF6B9D (K-popピンク) 
+- **Success Color**: #4CAF50 (SDGsグリーン)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 📋 開発ロードマップ
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Phase 1: 基本機能 (現在)
+- [x] プロジェクト基盤構築
+- [x] UI/UXデザイン
+- [ ] 認証システム
+- [ ] イベント管理機能
 
-## Deploy on Vercel
+### Phase 2: 拡張機能
+- [ ] ポイント・ゲーミフィケーション
+- [ ] メンバー交流機能
+- [ ] 専門機能実装
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Phase 3: 最適化・リリース
+- [ ] パフォーマンス最適化
+- [ ] テスト・品質改善
+- [ ] プロダクション環境デプロイ
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🤝 開発ガイドライン
+
+1. **TypeScript**: 厳密な型定義を使用
+2. **Tailwind CSS**: カスタムCSSを避け、Tailwindクラスを優先
+3. **コンポーネント**: 機能単位で小さく分割
+4. **コミット**: 意味のある単位でコミット
+
+## 📄 ライセンス
+
+このプロジェクトは [MIT License](LICENSE) の下で公開されています。
+
+---
+
+**Created with ❤️ for 上智大学KpopSDGsペナルティキック研究会ドルフィンズ**
