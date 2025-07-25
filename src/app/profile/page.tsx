@@ -7,22 +7,17 @@ import { Button } from '@/components/ui/button'
 import { 
   User, 
   GraduationCap, 
-  Heart, 
   Trophy, 
   Calendar, 
   Edit3, 
   LogOut,
-  Star,
   Target,
   Music,
   Award,
   Save,
   X,
   Camera,
-  MapPin,
   Clock,
-  TrendingUp,
-  Users,
   Activity
 } from 'lucide-react'
 import Link from 'next/link'

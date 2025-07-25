@@ -9,15 +9,11 @@ import {
   TrendingUp as TrendingUpIcon,
   Crown,
   Medal,
-  Zap,
   Target,
   Calendar,
   Sparkles,
   ArrowUp,
-  Gift,
   Users,
-  Flame,
-  Clock,
   ChevronRight
 } from 'lucide-react'
 

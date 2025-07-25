@@ -1,8 +1,4 @@
 import { createClient } from './client'
-import type { Database } from '@/types/database'
-
-type EventParticipation = Database['public']['Tables']['event_participations']['Row']
-type UserNotification = Database['public']['Tables']['user_notifications']['Row']
 
 export interface ParticipantDetail {
   id: string

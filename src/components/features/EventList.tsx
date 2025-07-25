@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Calendar, MapPin, Users, Clock, Trophy, Music, Dumbbell, BookOpen, Coffee, Bell } from 'lucide-react'
+import { Calendar, MapPin, Users, Trophy, Music, Dumbbell, BookOpen, Coffee, Bell } from 'lucide-react'
 
 // 型定義
 interface Event {
