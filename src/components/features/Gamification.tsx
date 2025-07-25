@@ -128,7 +128,7 @@ export const PointsDisplay = ({ points, rank, recentGains = [] }: PointsDisplayP
     if (!rank) return { title: 'ランク外', icon: Users, color: 'from-gray-400 to-gray-500' }
     if (rank === 1) return { title: '1位', icon: Crown, color: 'from-yellow-400 to-orange-500' }
     if (rank <= 3) return { title: `${rank}位`, icon: Medal, color: 'from-orange-400 to-red-500' }
-    if (rank <= 10) return { title: `${rank}位`, icon: Trophy, color: 'from-blue-400 to-purple-500' }
+    if (rank <= 10) return { title: `${rank}位`, icon: TrophyIcon, color: 'from-blue-400 to-purple-500' }
     return { title: `${rank}位`, icon: Target, color: 'from-green-400 to-blue-500' }
   }
 
@@ -242,7 +242,7 @@ export const Leaderboard = ({ users, currentUserId }: LeaderboardProps) => {
   const getRankIcon = (index: number) => {
     if (index === 0) return Crown
     if (index <= 2) return Medal
-    return Trophy
+    return TrophyIcon
   }
 
   return (

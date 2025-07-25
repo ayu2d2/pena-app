@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import { Calendar, Users, Trophy, MessageCircle, Heart, Sparkles, Target, Globe, Star, ChevronRight, Play } from "lucide-react"
+import { Calendar, Users, Trophy, Heart, Sparkles, Target, Globe, Star, ChevronRight, Play } from "lucide-react"
 import Link from "next/link"
 
 export default function Home() {

@@ -9,7 +9,6 @@ import {
   X, 
   Home, 
   Calendar as CalendarNav, 
-  Trophy as TrophyNav, 
   User as UserNav, 
   LogOut,
   Star,
@@ -37,8 +36,6 @@ interface MobileNavProps {
 
 export const MobileNav = ({ currentUser, onLogout }: MobileNavProps) => {
   const [isOpen, setIsOpen] = useState(false)
-  const [showUserMenu, setShowUserMenu] = useState(false)
-  const [notifications] = useState(3) // Demo notification count
   const pathname = usePathname()
 
   const navItems: NavItem[] = [

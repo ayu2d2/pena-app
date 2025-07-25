@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import type { EventType } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import { 
   Calendar as CalendarIcon, 
@@ -13,7 +12,6 @@ import {
   Target,
   BookOpen,
   Coffee,
-  Heart,
   Plus,
   X,
   Save,
@@ -21,6 +19,8 @@ import {
   Info,
   Sparkles
 } from 'lucide-react'
+
+type EventType = 'practice' | 'competition' | 'social' | 'study'
 
 interface EventFormData {
   title: string
