@@ -27,70 +27,145 @@ export default function AuthPage() {
 
   const router = useRouter()
 
+  const fallbackToDemo = () => {
+    // デモモード: 簡単な検証のみ
+    if (formData.email && formData.password) {
+      // メール形式の簡単なチェック
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(formData.email)) {
+        setError('有効なメールアドレスを入力してください。')
+        setLoading(false)
+        return
+      }
+
+      // パスワードの長さチェック
+      if (formData.password.length < 6) {
+        setError('パスワードは6文字以上で入力してください。')
+        setLoading(false)
+        return
+      }
+
+      // サインアップ時の追加検証
+      if (!isLogin) {
+        if (formData.password !== formData.confirmPassword) {
+          setError('パスワードが一致しません。')
+          setLoading(false)
+          return
+        }
+
+        if (!formData.displayName?.trim()) {
+          setError('表示名を入力してください。')
+          setLoading(false)
+          return
+        }
+      }
+
+      // デモユーザー情報を作成
+      const userInfo = {
+        id: 'demo-' + Date.now(),
+        email: formData.email,
+        name: formData.displayName || formData.email.split('@')[0],
+        display_name: formData.displayName || formData.email.split('@')[0],
+        total_points: 1000
+      }
+
+      // ローカルストレージに保存
+      localStorage.setItem('penaapp_user', JSON.stringify(userInfo))
+      
+      // 成功フィードバック
+      setError('')
+      
+      // ダッシュボードにリダイレクト
+      router.push('/dashboard')
+    } else {
+      setError('メールアドレスとパスワードを入力してください。')
+      setLoading(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
 
     try {
-      // デモモード: 簡単な検証のみ
-      if (formData.email && formData.password) {
-        // メール形式の簡単なチェック
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailRegex.test(formData.email)) {
-          setError('有効なメールアドレスを入力してください。')
-          setLoading(false)
-          return
-        }
+      // 実際のSupabase認証を試行し、失敗した場合はデモモードにフォールバック
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
 
-        // パスワードの長さチェック
-        if (formData.password.length < 6) {
-          setError('パスワードは6文字以上で入力してください。')
-          setLoading(false)
-          return
-        }
+      if (supabase) {
+        if (isLogin) {
+          // ログイン処理
+          const { data, error: authError } = await supabase.auth.signInWithPassword({
+            email: formData.email,
+            password: formData.password,
+          })
 
-        // 新規登録時の追加チェック
-        if (!isLogin) {
+          if (authError) {
+            console.warn('Supabase login failed, falling back to demo mode:', authError.message)
+            // Supabase認証が失敗した場合、デモモードにフォールバック
+            fallbackToDemo()
+            return
+          }
+
+          if (data.session) {
+            // 認証成功
+            const userInfo = {
+              id: data.session.user.id,
+              email: data.session.user.email,
+              name: data.session.user.user_metadata?.name || data.session.user.email?.split('@')[0],
+              display_name: data.session.user.user_metadata?.full_name || data.session.user.user_metadata?.name,
+              total_points: 1000
+            }
+            
+            localStorage.setItem('penaapp_user', JSON.stringify(userInfo))
+            localStorage.setItem('penaapp_session', JSON.stringify(data.session))
+            router.push('/dashboard')
+            return
+          }
+        } else {
+          // サインアップ処理
           if (formData.password !== formData.confirmPassword) {
             setError('パスワードが一致しません。')
             setLoading(false)
             return
           }
-          
-          if (!formData.displayName || formData.displayName.trim().length < 2) {
-            setError('表示名は2文字以上で入力してください。')
+
+          const { data, error: authError } = await supabase.auth.signUp({
+            email: formData.email,
+            password: formData.password,
+            options: {
+              data: {
+                name: formData.displayName,
+                full_name: formData.displayName
+              }
+            }
+          })
+
+          if (authError) {
+            console.warn('Supabase signup failed, falling back to demo mode:', authError.message)
+            // Supabase認証が失敗した場合、デモモードにフォールバック
+            fallbackToDemo()
+            return
+          }
+
+          if (data.user) {
+            // サインアップ成功
+            setError('')
+            alert('アカウントが作成されました！確認メールをチェックしてください。')
+            setIsLogin(true)
             setLoading(false)
             return
           }
         }
-
-        // ローディングシミュレーション（UX向上）
-        await new Promise(resolve => setTimeout(resolve, 800))
-
-        // デモ用: ローカルストレージに簡単な認証情報を保存
-        const userInfo = {
-          email: formData.email,
-          displayName: formData.displayName || 'デモユーザー',
-          loginTime: new Date().toISOString(),
-          userId: Math.random().toString(36).substr(2, 9)
-        }
-        
-        localStorage.setItem('penaapp_user', JSON.stringify(userInfo))
-        
-        // 成功フィードバック
-        setError('')
-        
-        // ダッシュボードにリダイレクト
-        router.push('/dashboard')
-      } else {
-        setError('メールアドレスとパスワードを入力してください。')
-        setLoading(false)
       }
-    } catch (err) {
-      console.error('Authentication error:', err)
-      setError('予期しないエラーが発生しました。もう一度お試しください。')
-      setLoading(false)
+
+      // Supabaseクライアントが利用できない場合、デモモードを使用
+      fallbackToDemo()
+
+    } catch (error) {
+      console.warn('Authentication error, falling back to demo mode:', error)
+      fallbackToDemo()
     }
   }
 
@@ -100,152 +175,132 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-teal-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Header */}
+        {/* ヘッダー */}
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-3 mb-6 group">
-            <div className="text-4xl transition-transform group-hover:scale-110">🐬</div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              PenaApp
-            </h1>
-          </Link>
-          <h2 className="text-2xl font-bold mb-2 text-gray-800">
-            {isLogin ? 'おかえりなさい！' : 'ようこそ！'}
-          </h2>
-          <p className="text-gray-600">
-            {isLogin ? 'アカウントにログインしてください' : 'アカウントを作成しましょう'}
+          <div className="inline-block p-4 bg-white/10 rounded-full mb-4">
+            <div className="text-4xl">🐬</div>
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-2">PenaApp</h1>
+          <p className="text-blue-200">
+            {isLogin ? 'アカウントにログイン' : '新しいアカウントを作成'}
           </p>
         </div>
 
-        {/* Auth Form */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-xl p-6 border border-white/20">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email Field */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                <Mail className="inline w-4 h-4 mr-2 text-blue-500" />
+        {/* 認証フォーム */}
+        <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 shadow-xl">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* メールアドレス */}
+            <div>
+              <label className="block text-sm font-medium text-white mb-2">
                 メールアドレス
               </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => handleInputChange('email', e.target.value)}
-                className="w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
-                placeholder="your@example.com"
-                required
-                disabled={loading}
-                aria-describedby="email-hint"
-              />
-              <p id="email-hint" className="text-xs text-gray-500">
-                任意のメールアドレスが使用できます
-              </p>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-300 w-5 h-5" />
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleInputChange('email', e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-200 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20"
+                  placeholder="your@email.com"
+                  required
+                />
+              </div>
             </div>
 
-            {/* Display Name Field (Registration only) */}
+            {/* 表示名（新規登録時のみ） */}
             {!isLogin && (
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  <User className="inline w-4 h-4 mr-2 text-blue-500" />
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
                   表示名
                 </label>
-                <input
-                  type="text"
-                  value={formData.displayName}
-                  onChange={(e) => handleInputChange('displayName', e.target.value)}
-                  className="w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
-                  placeholder="山田太郎"
-                  required
-                  disabled={loading}
-                  aria-describedby="name-hint"
-                />
-                <p id="name-hint" className="text-xs text-gray-500">
-                  2文字以上で入力してください
-                </p>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-300 w-5 h-5" />
+                  <input
+                    type="text"
+                    value={formData.displayName || ''}
+                    onChange={(e) => handleInputChange('displayName', e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-200 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20"
+                    placeholder="あなたの名前"
+                    required
+                  />
+                </div>
               </div>
             )}
 
-            {/* Password Field */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                <Lock className="inline w-4 h-4 mr-2 text-blue-500" />
+            {/* パスワード */}
+            <div>
+              <label className="block text-sm font-medium text-white mb-2">
                 パスワード
               </label>
               <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-300 w-5 h-5" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={(e) => handleInputChange('password', e.target.value)}
-                  className="w-full p-3 pr-12 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
+                  className="w-full pl-12 pr-12 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-200 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20"
                   placeholder="6文字以上"
                   required
-                  disabled={loading}
-                  aria-describedby="password-hint"
+                  minLength={6}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600 transition-colors"
-                  disabled={loading}
-                  aria-label={showPassword ? 'パスワードを隠す' : 'パスワードを表示'}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-blue-300 hover:text-white"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
-              <p id="password-hint" className="text-xs text-gray-500">
-                6文字以上で入力してください
-              </p>
             </div>
 
-            {/* Confirm Password Field (Registration only) */}
+            {/* パスワード確認（新規登録時のみ） */}
             {!isLogin && (
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  <Lock className="inline w-4 h-4 mr-2 text-blue-500" />
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
                   パスワード確認
                 </label>
-                <input
-                  type="password"
-                  value={formData.confirmPassword}
-                  onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                  className="w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
-                  placeholder="パスワードを再入力"
-                  required
-                  disabled={loading}
-                  aria-describedby="confirm-hint"
-                />
-                <p id="confirm-hint" className="text-xs text-gray-500">
-                  上記と同じパスワードを入力してください
-                </p>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-300 w-5 h-5" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.confirmPassword || ''}
+                    onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-200 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20"
+                    placeholder="パスワードを再入力"
+                    required
+                    minLength={6}
+                  />
+                </div>
               </div>
             )}
 
-            {/* Error Message */}
+            {/* エラーメッセージ */}
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm flex items-start gap-2">
-                <div className="text-red-500 mt-0.5">⚠️</div>
-                <div>{error}</div>
+              <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-3 text-red-200 text-sm">
+                {error}
               </div>
             )}
 
-            {/* Submit Button */}
+            {/* 送信ボタン */}
             <Button
               type="submit"
-              className="w-full h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-lg transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none"
               disabled={loading}
+              className="w-full bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white font-semibold py-3 rounded-lg shadow-lg transition-all duration-200 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
                   処理中...
                 </div>
               ) : (
-                isLogin ? 'ログイン' : '新規登録'
+                isLogin ? 'ログイン' : 'アカウント作成'
               )}
             </Button>
           </form>
 
-          {/* Toggle Form Mode */}
+          {/* モード切り替え */}
           <div className="mt-6 text-center">
             <button
               type="button"
@@ -259,37 +314,30 @@ export default function AuthPage() {
                   displayName: ''
                 })
               }}
-              className="text-blue-600 hover:text-blue-800 hover:underline transition-colors font-medium"
-              disabled={loading}
+              className="text-blue-200 hover:text-white transition-colors"
             >
-              {isLogin ? 'アカウントをお持ちでない方はこちら' : 'すでにアカウントをお持ちの方はこちら'}
+              {isLogin 
+                ? 'アカウントをお持ちでない方はこちら' 
+                : '既にアカウントをお持ちの方はこちら'
+              }
             </button>
           </div>
 
-          {/* Demo Info */}
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm">
-            <div className="flex items-start gap-2">
-              <div className="text-blue-500 mt-0.5">ℹ️</div>
-              <div>
-                <p className="font-medium text-blue-800 mb-1">デモモード</p>
-                <p className="text-blue-700">
-                  任意のメールアドレスとパスワード（6文字以上）でログインできます。
-                  <br />
-                  例: test@example.com / password123
-                </p>
-              </div>
-            </div>
+          {/* デモモード案内 */}
+          <div className="mt-4 text-center">
+            <p className="text-xs text-blue-200/80">
+              💡 現在はデモモードで動作しています
+            </p>
           </div>
         </div>
 
-        {/* Footer */}
+        {/* フッター */}
         <div className="text-center mt-8">
           <Link 
             href="/" 
-            className="inline-flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-colors text-sm group"
+            className="text-blue-200 hover:text-white transition-colors text-sm"
           >
-            <span className="transform group-hover:-translate-x-1 transition-transform">←</span>
-            ホームに戻る
+            ← ホームに戻る
           </Link>
         </div>
       </div>

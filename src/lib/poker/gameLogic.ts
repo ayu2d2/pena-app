@@ -24,6 +24,8 @@ export type HandRank =
   | 'straight-flush'
   | 'royal-flush'
 
+export type CPULevel = 'beginner' | 'normal' | 'expert'
+
 export interface Player {
   id: string
   name: string
@@ -33,6 +35,7 @@ export interface Player {
   status: 'active' | 'folded' | 'all-in' | 'out'
   isDealer: boolean
   isCPU: boolean
+  cpuLevel?: CPULevel
 }
 
 export interface GameState {
@@ -315,28 +318,91 @@ export function getHandRankName(rank: HandRank): string {
   return names[rank]
 }
 
-// CPUの行動を決定（シンプルAI）
+// CPUの行動を決定（レベル別AI）
 export function decideCPUAction(
   player: Player, 
   gameState: GameState, 
-  callAmount: number
+  callAmount: number,
+  cpuLevel: CPULevel = 'normal'
 ): 'fold' | 'call' | 'raise' | 'check' {
   const hand = evaluateHand(player.holeCards, gameState.communityCards)
   const handStrength = hand.rankValue / 10000 // 0-1に正規化
   
-  // 非常にシンプルなAI
-  if (handStrength > 0.7) {
-    // 強いハンド: レイズまたはコール
-    return Math.random() > 0.3 ? 'raise' : 'call'
-  } else if (handStrength > 0.4) {
-    // 中程度のハンド: コールまたはチェック
-    return callAmount === 0 ? 'check' : (Math.random() > 0.5 ? 'call' : 'fold')
-  } else if (handStrength > 0.2) {
-    // 弱いハンド: チェックまたはフォールド
-    return callAmount === 0 ? 'check' : 'fold'
+  // レベル別の閾値設定
+  const levelConfig = {
+    beginner: {
+      raiseThreshold: 0.8,    // かなり強い手でのみレイズ
+      callThreshold: 0.5,     // 中程度の手でコール
+      foldThreshold: 0.3,     // 弱い手で積極的にフォールド
+      bluffChance: 0.05,      // ブラフ率低い
+      aggressiveness: 0.2     // 攻撃性低い
+    },
+    normal: {
+      raiseThreshold: 0.7,    // 標準的な判断
+      callThreshold: 0.4,     // バランスの取れた判断
+      foldThreshold: 0.2,     // 適度なリスク管理
+      bluffChance: 0.15,      // 適度なブラフ
+      aggressiveness: 0.4     // 標準的な攻撃性
+    },
+    expert: {
+      raiseThreshold: 0.6,    // より積極的なレイズ
+      callThreshold: 0.3,     // 低い手でもコール
+      foldThreshold: 0.15,    // 粘り強い
+      bluffChance: 0.25,      // 高いブラフ率
+      aggressiveness: 0.6     // 高い攻撃性
+    }
+  }
+  
+  const config = levelConfig[cpuLevel]
+  const randomFactor = Math.random()
+  
+  // ポットオッズとポジションを考慮（エキスパートレベル）
+  const potOdds = callAmount > 0 ? callAmount / (gameState.pot + callAmount) : 0
+  const isLatePosition = gameState.currentPlayerIndex > gameState.players.length / 2
+  
+  // エキスパートレベルの高度な判断
+  if (cpuLevel === 'expert') {
+    // ポットオッズ計算
+    const impliedOdds = handStrength * (1 + (isLatePosition ? 0.1 : 0))
+    
+    if (impliedOdds > potOdds * 1.5 && handStrength > config.raiseThreshold) {
+      return randomFactor > 0.3 ? 'raise' : 'call'
+    }
+    
+    // ブラフの実行
+    if (randomFactor < config.bluffChance && callAmount > 0) {
+      return 'raise'
+    }
+  }
+  
+  // 基本的な判断ロジック
+  if (handStrength > config.raiseThreshold) {
+    // 強いハンド
+    if (randomFactor > (1 - config.aggressiveness)) {
+      return 'raise'
+    }
+    return callAmount === 0 ? 'check' : 'call'
+  } else if (handStrength > config.callThreshold) {
+    // 中程度のハンド
+    if (callAmount === 0) {
+      return 'check'
+    }
+    // レベルに応じてコール/フォールドを決定
+    return randomFactor > (1 - handStrength) ? 'call' : 'fold'
+  } else if (handStrength > config.foldThreshold) {
+    // 弱めのハンド
+    if (callAmount === 0) {
+      return 'check'
+    }
+    // ビギナーは早めにフォールド、エキスパートは粘る
+    return randomFactor < config.bluffChance ? 'call' : 'fold'
   } else {
-    // 非常に弱いハンド: フォールド
-    return callAmount === 0 ? 'check' : 'fold'
+    // 非常に弱いハンド
+    if (callAmount === 0) {
+      // ブラフチェック
+      return randomFactor < config.bluffChance ? 'check' : 'check'
+    }
+    return 'fold'
   }
 }
 

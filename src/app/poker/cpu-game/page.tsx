@@ -17,6 +17,7 @@ import {
   Card, 
   Player, 
   GameState, 
+  CPULevel,
   createDeck, 
   dealCard, 
   evaluateHand, 
@@ -40,6 +41,7 @@ export default function CPUGamePage() {
   const [currentPlayerTurn, setCurrentPlayerTurn] = useState(0)
   const [gameMode, setGameMode] = useState<'casual' | 'realistic'>('casual')
   const [gameResult, setGameResult] = useState<'win' | 'lose' | 'tie' | null>(null)
+  const [cpuLevel, setCpuLevel] = useState<CPULevel>('normal')
   
   // ゲーム終了処理の重複実行を防ぐフラグ
   const gameEndingRef = useRef(false)
@@ -240,7 +242,8 @@ export default function CPUGamePage() {
       currentBet: 0,
       status: 'active',
       isDealer: index === 0, // 最初のCPUがディーラー
-      isCPU: true
+      isCPU: true,
+      cpuLevel: cpuLevel
     }))
 
     const allPlayers = [humanPlayer, ...cpuPlayers]
@@ -297,6 +300,16 @@ export default function CPUGamePage() {
     const updatedGameState = { ...gameState }
     
     setDealerMessage("ゲームを開始いたします。まずはアンティを頂戴いたします。")
+    
+    // CPUレベルに応じたメッセージを追加
+    setTimeout(() => {
+      const levelMessages = {
+        beginner: "本日のCPUプレイヤーは控えめなプレイスタイルです。",
+        normal: "本日のCPUプレイヤーはバランスの取れたプレイをいたします。", 
+        expert: "本日のCPUプレイヤーは非常に積極的で手強い相手です。お気をつけください。"
+      }
+      setDealerMessage(levelMessages[cpuLevel])
+    }, 2000)
     
     // 全プレイヤーのブラインドベット
     updatedGameState.players.forEach(player => {
@@ -377,7 +390,7 @@ export default function CPUGamePage() {
       await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000))
       
       const callAmount = Math.max(0, Math.max(...gameState.players.map(p => p.currentBet)) - cpuPlayer.currentBet)
-      const cpuAction = decideCPUAction(cpuPlayer, gameState, callAmount)
+      const cpuAction = decideCPUAction(cpuPlayer, gameState, callAmount, cpuPlayer.cpuLevel || 'normal')
       
       // アクションメッセージ
       let actionMessage = ""
@@ -706,12 +719,23 @@ export default function CPUGamePage() {
               <span className="text-emerald-300">{gameState.pot}pt</span>
             </div>
             <div className="text-teal-300 text-xs md:text-sm font-medium capitalize">{gameState.phase}</div>
-            <div className={`text-xs font-medium px-2 py-1 rounded-md mt-1 ${
-              gameMode === 'realistic' 
-                ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30' 
-                : 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
-            }`}>
-              {gameMode === 'realistic' ? '🎯 リアルモード' : '🎮 カジュアル'}
+            <div className="flex gap-2 mt-1">
+              <div className={`text-xs font-medium px-2 py-1 rounded-md ${
+                gameMode === 'realistic' 
+                  ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30' 
+                  : 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
+              }`}>
+                {gameMode === 'realistic' ? '🎯 リアル' : '🎮 カジュアル'}
+              </div>
+              <div className={`text-xs font-medium px-2 py-1 rounded-md ${
+                cpuLevel === 'expert' 
+                  ? 'bg-red-600/20 text-red-300 border border-red-500/30'
+                  : cpuLevel === 'normal'
+                  ? 'bg-yellow-600/20 text-yellow-300 border border-yellow-500/30'
+                  : 'bg-green-600/20 text-green-300 border border-green-500/30'
+              }`}>
+                {cpuLevel === 'expert' ? '🔥 エキスパート' : cpuLevel === 'normal' ? '⚖️ ノーマル' : '🌱 ビギナー'}
+              </div>
             </div>
             </div>
           </div>
@@ -875,6 +899,57 @@ export default function CPUGamePage() {
           <div className="text-center">
             {gamePhase === 'betting' && (
               <div className="space-y-6">
+                {/* CPUレベル選択 */}
+                <div className="bg-black/40 rounded-xl p-6 backdrop-blur-sm border border-purple-600/30">
+                  <div className="text-white mb-4">
+                    <label className="block text-lg font-medium mb-4">🤖 CPUの難易度を選択</label>
+                    <div className="grid grid-cols-3 gap-3">
+                      <Button
+                        onClick={() => setCpuLevel('beginner')}
+                        className={`py-3 px-4 rounded-lg font-medium transition-all duration-200 ${
+                          cpuLevel === 'beginner'
+                            ? 'bg-green-600/40 border-2 border-green-400 text-green-200 shadow-lg'
+                            : 'bg-green-600/20 border border-green-500/30 text-green-300 hover:bg-green-600/30'
+                        }`}
+                      >
+                        <div className="text-center">
+                          <div className="text-lg mb-1">🌱</div>
+                          <div className="text-sm">ビギナー</div>
+                          <div className="text-xs opacity-80">控えめ</div>
+                        </div>
+                      </Button>
+                      <Button
+                        onClick={() => setCpuLevel('normal')}
+                        className={`py-3 px-4 rounded-lg font-medium transition-all duration-200 ${
+                          cpuLevel === 'normal'
+                            ? 'bg-yellow-600/40 border-2 border-yellow-400 text-yellow-200 shadow-lg'
+                            : 'bg-yellow-600/20 border border-yellow-500/30 text-yellow-300 hover:bg-yellow-600/30'
+                        }`}
+                      >
+                        <div className="text-center">
+                          <div className="text-lg mb-1">⚖️</div>
+                          <div className="text-sm">ノーマル</div>
+                          <div className="text-xs opacity-80">バランス</div>
+                        </div>
+                      </Button>
+                      <Button
+                        onClick={() => setCpuLevel('expert')}
+                        className={`py-3 px-4 rounded-lg font-medium transition-all duration-200 ${
+                          cpuLevel === 'expert'
+                            ? 'bg-red-600/40 border-2 border-red-400 text-red-200 shadow-lg'
+                            : 'bg-red-600/20 border border-red-500/30 text-red-300 hover:bg-red-600/30'
+                        }`}
+                      >
+                        <div className="text-center">
+                          <div className="text-lg mb-1">🔥</div>
+                          <div className="text-sm">エキスパート</div>
+                          <div className="text-xs opacity-80">積極的</div>
+                        </div>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                
                 <div className="bg-black/40 rounded-xl p-6 backdrop-blur-sm border border-yellow-600/30">
                   <div className="text-white mb-4">
                     <label className="block text-lg font-medium mb-4">ベット額を選択</label>
