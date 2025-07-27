@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { 
@@ -39,6 +39,10 @@ export default function CPUGamePage() {
   const [dealingStep, setDealingStep] = useState(0)
   const [currentPlayerTurn, setCurrentPlayerTurn] = useState(0)
   const [gameMode, setGameMode] = useState<'casual' | 'realistic'>('casual')
+  const [gameResult, setGameResult] = useState<'win' | 'lose' | 'tie' | null>(null)
+  
+  // ゲーム終了処理の重複実行を防ぐフラグ
+  const gameEndingRef = useRef(false)
 
   // URLパラメータからモードを取得
   useEffect(() => {
@@ -48,6 +52,9 @@ export default function CPUGamePage() {
       setGameMode(mode)
     }
   }, [])
+
+  // ゲームオーバー時の全処理停止フラグ
+  const isGameOver = gamePhase === 'game-over'
 
   // ディーラーのセリフ集
   const dealerPhrases = {
@@ -62,19 +69,19 @@ export default function CPUGamePage() {
       "ホールカードの配布を行います。"
     ],
     flop: [
-      "フロップを公開いたします。",
-      "コミュニティカードの第一段階です。",
+      "場に共通カードを開きます。",
+      "場のカードの第一段階です。",,
       "3枚のカードが場に出ました。"
     ],
     turn: [
       "ターンカードを公開いたします。",
-      "4枚目のコミュニティカードです。",
+      "4枚目の場のカードです。",
       "局面が変わってまいりました。"
     ],
     river: [
       "リバーカードです。最後のカードになります。",
       "5枚目のカード、運命の一枚です。",
-      "すべてのコミュニティカードが出揃いました。"
+      "すべての場のカードが出揃いました。"
     ],
     showdown: [
       "ショーダウンの時間です。カードをお見せください。",
@@ -130,8 +137,11 @@ export default function CPUGamePage() {
   }
 
   const setDealerSpeech = (category: keyof typeof dealerPhrases) => {
-    const phrase = getRandomPhrase(dealerPhrases[category])
-    setDealerMessage(phrase)
+    const phrases = dealerPhrases[category] as string[]
+    if (phrases && phrases.length > 0) {
+      const phrase = getRandomPhrase(phrases)
+      setDealerMessage(phrase)
+    }
   }
 
   const generatePlayerThought = (player: Player, gameState: GameState) => {
@@ -202,6 +212,10 @@ export default function CPUGamePage() {
   }
 
   const startNewGame = (user: any) => {
+    // ゲーム終了フラグをリセット
+    gameEndingRef.current = false
+    setGameResult(null)
+    
     const deck = createDeck()
     let remainingDeck = [...deck]
 
@@ -217,7 +231,7 @@ export default function CPUGamePage() {
       isCPU: false
     }
 
-    const cpuNames = ['タナカ', 'サトウ', 'ヤマダ', 'ワタナベ', 'スズキ']
+    const cpuNames = ['タナカ', 'サトウ', 'ヤマダ', 'ワタナベ']
     const cpuPlayers: Player[] = cpuNames.map((name, index) => ({
       id: `cpu-${index}`,
       name: name,
@@ -271,7 +285,7 @@ export default function CPUGamePage() {
       setMessage('リアルモード：スモールブラインド(5pt)、ビッグブラインド(10pt)が設定されました。アクションを選択してください。')
     } else {
       setGamePhase('betting')
-      setMessage('カジュアルモード：6人テーブルでポーカーゲーム開始！ベット額を決めましょう。')
+      setMessage('カジュアルモード：5人テーブルでポーカーゲーム開始！ベット額を決めましょう。')
     }
     
     setDealerSpeech('welcome')
@@ -310,7 +324,8 @@ export default function CPUGamePage() {
     switch (action) {
       case 'fold':
         player.status = 'folded'
-        processCPUTurns(updatedGameState)
+        setGameState(updatedGameState) // 状態を更新
+        endGame(updatedGameState, 'lose') // ゲーム終了処理を呼び出し
         return
 
       case 'call':
@@ -336,6 +351,13 @@ export default function CPUGamePage() {
   }
 
   const processCPUTurns = async (gameState: GameState) => {
+    const humanPlayer = gameState.players[0]
+    
+    // 既にゲームオーバーの場合や人間プレイヤーがフォールドしている場合は処理しない
+    if (isGameOver || humanPlayer.status === 'folded') {
+      return
+    }
+    
     const cpuPlayers = gameState.players.filter(p => p.isCPU && p.status === 'active')
     
     setDealerMessage("他のプレイヤーのアクションをお待ちください...")
@@ -392,6 +414,15 @@ export default function CPUGamePage() {
 
     setCurrentPlayerTurn(-1)
     
+    // アクティブプレイヤーのチェック - 1人以下になったら即座にゲーム終了
+    const activePlayers = gameState.players.filter(p => p.status === 'active')
+    if (activePlayers.length <= 1 && !gameEndingRef.current) {
+      setTimeout(() => {
+        endGame(gameState, 'win')
+      }, 1000)
+      return
+    }
+    
     // フロップを開く
     setTimeout(() => {
       dealCommunityCards(gameState)
@@ -399,6 +430,11 @@ export default function CPUGamePage() {
   }
 
   const dealCommunityCards = async (gameState: GameState) => {
+    // 既にゲームオーバーの場合は処理しない
+    if (isGameOver) {
+      return
+    }
+    
     let remainingDeck = [...gameState.deck]
 
     setDealerSpeech('flop')
@@ -427,13 +463,26 @@ export default function CPUGamePage() {
     setGameState(gameState)
     
     setTimeout(() => {
-      showdown(gameState)
+      // ゲームオーバーでない場合のみshowdownを実行
+      if (!isGameOver) {
+        showdown(gameState)
+      }
     }, 3000)
   }
 
   const showdown = async (gameState: GameState) => {
+    // 既にゲームオーバーまたはゲーム終了処理中の場合は処理しない
+    if (gamePhase === 'game-over' || gameEndingRef.current) {
+      return
+    }
+    
     const activePlayers = gameState.players.filter(p => p.status === 'active')
     const humanPlayer = gameState.players[0]
+    
+    // アクティブプレイヤーが1人以下の場合はshowdownは実行しない
+    if (activePlayers.length <= 1) {
+      return
+    }
     
     setDealerSpeech('showdown')
     await new Promise(resolve => setTimeout(resolve, 1500))
@@ -450,27 +499,41 @@ export default function CPUGamePage() {
 
     setGamePhase('showdown')
 
-    // 結果を判定
-    if (winner.player.id === humanPlayer.id) {
-      setDealerSpeech('win')
-      endGame(gameState, 'win')
-    } else if (humanPlayer.status === 'folded') {
-      setDealerSpeech('lose')
-      endGame(gameState, 'lose')
-    } else {
-      // 同じハンドランクの場合は引き分け
-      const humanHand = playerHands.find(p => p.player.id === humanPlayer.id)
-      if (humanHand && humanHand.hand.rankValue === winner.hand.rankValue) {
-        setDealerMessage("引き分けです。ポットを分配いたします。")
-        endGame(gameState, 'tie')
-      } else {
+    // 結果を判定（ゲーム終了処理中でない場合のみ）
+    if (!gameEndingRef.current) {
+      if (winner.player.id === humanPlayer.id) {
+        setDealerSpeech('win')
+        endGame(gameState, 'win')
+      } else if (humanPlayer.status === 'folded') {
         setDealerSpeech('lose')
         endGame(gameState, 'lose')
+      } else {
+        // 同じハンドランクの場合は引き分け
+        const humanHand = playerHands.find(p => p.player.id === humanPlayer.id)
+        if (humanHand && humanHand.hand.rankValue === winner.hand.rankValue) {
+          setDealerMessage("引き分けです。ポットを分配いたします。")
+          endGame(gameState, 'tie')
+        } else {
+          setDealerSpeech('lose')
+          endGame(gameState, 'lose')
+        }
       }
     }
   }
 
   const endGame = (gameState: GameState, result: 'win' | 'lose' | 'tie') => {
+    console.log(`endGame called with result: ${result}, gameEndingRef.current: ${gameEndingRef.current}, gamePhase: ${gamePhase}`)
+    
+    // 既にゲーム終了処理中の場合は処理しない（重複防止）
+    if (gameEndingRef.current || gamePhase === 'game-over') {
+      console.log('endGame aborted - already ending or game over')
+      return
+    }
+    
+    // ゲーム終了処理中フラグを設定
+    gameEndingRef.current = true
+    console.log('endGame proceeding - flag set to true')
+    
     const humanPlayer = gameState.players[0]
     const activePlayers = gameState.players.filter(p => p.status === 'active')
     
@@ -498,6 +561,7 @@ export default function CPUGamePage() {
 
     setMessage(resultMessage)
     setGamePhase('game-over')
+    setGameResult(result)
     setGameState(gameState)
 
     // ユーザーのポイントを更新（実際のアプリではサーバーで処理）
@@ -663,22 +727,8 @@ export default function CPUGamePage() {
                 <div className="text-center space-y-1 md:space-y-2">
                   <div className="text-emerald-300 font-bold text-base md:text-lg lg:text-2xl tracking-wider">💰 POT</div>
                   <div className="text-white font-bold text-xl md:text-2xl lg:text-3xl bg-gradient-to-r from-emerald-300 to-teal-300 bg-clip-text text-transparent">
-                    {gameState.pot}
+                    {gameState.pot}pt
                   </div>
-                  <div className="text-emerald-300/80 text-xs md:text-sm">ポイント</div>
-                  
-                  {/* コミュニティカード表示エリア */}
-                  {gameState.communityCards.length > 0 && (
-                    <div className="flex justify-center gap-1 mt-2 md:mt-4">
-                      {gameState.communityCards.map((card, index) => (
-                        <div key={index} className="w-6 h-8 md:w-8 md:h-12 bg-white rounded border shadow-sm flex items-center justify-center text-xs md:text-sm">
-                          <span style={{ color: getCardColor(card.suit) }}>
-                            {card.rank}{getCardSymbol(card.suit)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -700,16 +750,6 @@ export default function CPUGamePage() {
                     top: `calc(50% + ${position.y}px)`,
                   }}
                 >
-                  {/* 思考バブル - モバイル最適化 */}
-                  {playerThought && player.isCPU && (
-                    <div className="absolute -top-12 md:-top-16 left-1/2 transform -translate-x-1/2 z-40 animate-fade-in">
-                      <div className="bg-gradient-to-r from-white/95 to-gray-100/95 rounded-xl p-2 md:p-3 shadow-2xl border border-purple-300/50 max-w-28 md:max-w-32 backdrop-blur-sm">
-                        <div className="text-xs md:text-sm text-gray-800 text-center font-medium leading-relaxed">{playerThought}</div>
-                        <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 rotate-45 w-2 h-2 bg-white border-r border-b border-purple-300/50"></div>
-                      </div>
-                    </div>
-                  )}
-
                   {/* プレイヤー情報 - より洗練されたデザイン */}
                   <div className={`text-center mb-2 transition-all duration-500 rounded-xl p-2 md:p-3 border-2 shadow-lg backdrop-blur-sm ${
                     isHuman 
@@ -734,31 +774,49 @@ export default function CPUGamePage() {
                       )}
                     </div>
                     <div className="text-white text-xs md:text-sm font-bold tracking-wide">{player.name}</div>
-                    <div className="text-emerald-300 text-xs md:text-sm font-semibold flex items-center justify-center gap-1">
-                      <span className="text-emerald-400">💰</span>
-                      {player.chips}pt
-                    </div>
-                    {player.currentBet > 0 && (
-                      <div className="text-teal-400 text-xs font-medium animate-pulse flex items-center justify-center gap-1">
-                        <span>🎯</span>
-                        ベット: {player.currentBet}
-                      </div>
-                    )}
+                    
+                    {/* 人間プレイヤーは常に表示、CPUは自分のターンの時のみ詳細表示 */}
+                    {isHuman || isCurrentPlayer ? (
+                      <>
+                        <div className="text-emerald-300 text-xs md:text-sm font-semibold flex items-center justify-center gap-1">
+                          <span className="text-emerald-400">💰</span>
+                          {player.chips}pt
+                        </div>
+                        {player.currentBet > 0 && (
+                          <div className="text-teal-400 text-xs font-medium animate-pulse flex items-center justify-center gap-1">
+                            <span>🎯</span>
+                            ベット: {player.currentBet}pt
+                          </div>
+                        )}
+                      </>
+                    ) : null}
                     {player.status === 'folded' && (
                       <div className="text-red-400 text-xs font-medium">❌ フォールド</div>
                     )}
-                    {isCurrentPlayer && (
+                    {isCurrentPlayer && !isHuman && (
                       <div className="text-yellow-300 text-xs animate-pulse">考え中...</div>
                     )}
                   </div>
 
                   {/* プレイヤーのカード */}
-                  <div className="flex gap-1 justify-center">
+                  <div className={`flex gap-1 justify-center transition-all duration-500 ${
+                    player.status === 'folded' ? 'relative' : ''
+                  }`}>
+                    {/* フォールド時のオーバーレイ */}
+                    {player.status === 'folded' && (
+                      <div className="absolute inset-0 flex items-center justify-center z-10 bg-black/20 rounded-lg">
+                        <div className="text-red-400 text-xs font-bold bg-black/60 px-2 py-1 rounded-md border border-red-400/30">
+                          FOLD
+                        </div>
+                      </div>
+                    )}
                     {player.holeCards.map((card, cardIndex) => (
                       <div key={cardIndex} className={`transform transition-all duration-500 ${
                         isDealing && dealingStep === index + cardIndex * gameState.players.length
                           ? 'animate-bounce scale-110'
                           : 'hover:scale-110'
+                      } ${
+                        player.status === 'folded' ? 'opacity-40 grayscale filter blur-[1px] scale-95' : ''
                       }`}>
                         {renderCard(card, !isHuman && gamePhase !== 'showdown', true)}
                       </div>
@@ -769,11 +827,11 @@ export default function CPUGamePage() {
             })}
           </div>
 
-          {/* コミュニティカード（テーブル下部） */}
+          {/* 場のカード（テーブル下部） */}
           <div className="mt-8 text-center">
             <h3 className="text-white text-lg sm:text-xl font-bold mb-4 flex items-center justify-center gap-2">
               <Spade className="w-5 h-5 text-yellow-400" />
-              コミュニティカード
+              場のカード
               <Heart className="w-5 h-5 text-red-400" />
             </h3>
             <div className="flex justify-center gap-2 sm:gap-4 bg-black/40 rounded-xl p-4 backdrop-blur-sm border border-yellow-600/30">
@@ -842,12 +900,24 @@ export default function CPUGamePage() {
                     </div>
                   </div>
                 </div>
-                <Button
-                  onClick={startRound}
-                  className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white px-8 md:px-12 py-3 md:py-4 text-lg md:text-xl font-bold rounded-xl shadow-xl transform transition-all duration-200 hover:scale-105 w-full max-w-sm mx-auto"
-                >
-                  🎰 ゲーム開始
-                </Button>
+                <div className="flex gap-4 justify-center">
+                  <Button
+                    onClick={() => {
+                      setGamePhase('game-over')
+                      setMessage('🚪 敗北 - ゲームを降りました')
+                      setDealerMessage('お疲れ様でした。またのご参加をお待ちしております。')
+                    }}
+                    className="bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white px-6 py-3 text-lg font-bold rounded-xl shadow-lg"
+                  >
+                    🚪 降りる
+                  </Button>
+                  <Button
+                    onClick={startRound}
+                    className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white px-8 md:px-12 py-3 md:py-4 text-lg md:text-xl font-bold rounded-xl shadow-xl transform transition-all duration-200 hover:scale-105"
+                  >
+                    🎰 ゲーム開始
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -881,20 +951,54 @@ export default function CPUGamePage() {
             )}
 
             {gamePhase === 'game-over' && (
-              <div className="space-y-4">
-                <Button
-                  onClick={() => startNewGame(currentUser)}
-                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-12 py-4 text-xl font-bold rounded-xl shadow-lg transform transition-transform hover:scale-105 mr-4"
-                >
-                  🎯 もう一度プレイ
-                </Button>
-                <Button
-                  onClick={() => window.location.href = '/poker'}
-                  variant="outline"
-                  className="bg-purple-600/20 border-purple-400 text-purple-200 hover:bg-purple-600/40 px-8 py-4 text-lg rounded-xl"
-                >
-                  🏠 ポーカーホームに戻る
-                </Button>
+              <div className={`rounded-2xl p-8 backdrop-blur-sm border max-w-md mx-auto ${
+                gameResult === 'win' 
+                  ? 'bg-emerald-900/60 border-emerald-500/30' 
+                  : gameResult === 'tie'
+                  ? 'bg-yellow-900/60 border-yellow-500/30'
+                  : 'bg-red-900/60 border-red-500/30'
+              }`}>
+                <div className="text-center space-y-6">
+                  {gameResult === 'win' && (
+                    <>
+                      <div className="text-emerald-400 text-6xl mb-4">🎉</div>
+                      <h2 className="text-2xl font-bold text-emerald-400 mb-2">勝利！</h2>
+                      <p className="text-emerald-200 mb-6">素晴らしいプレイでした！</p>
+                    </>
+                  )}
+                  
+                  {gameResult === 'tie' && (
+                    <>
+                      <div className="text-yellow-400 text-6xl mb-4">🤝</div>
+                      <h2 className="text-2xl font-bold text-yellow-400 mb-2">引き分け</h2>
+                      <p className="text-yellow-200 mb-6">惜しい勝負でした！</p>
+                    </>
+                  )}
+                  
+                  {gameResult === 'lose' && (
+                    <>
+                      <div className="text-red-400 text-6xl mb-4">💀</div>
+                      <h2 className="text-2xl font-bold text-red-400 mb-2">敗北</h2>
+                      <p className="text-gray-300 mb-6">またチャレンジしてみましょう！</p>
+                    </>
+                  )}
+                  
+                  <div className="space-y-4">
+                    <Button
+                      onClick={() => startNewGame(currentUser)}
+                      className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-8 py-3 text-lg font-bold rounded-xl shadow-lg transform transition-transform hover:scale-105 w-full"
+                    >
+                      🔄 リトライ
+                    </Button>
+                    <Button
+                      onClick={() => window.location.href = '/poker'}
+                      variant="outline"
+                      className="bg-gray-600/20 border-gray-400 text-gray-200 hover:bg-gray-600/40 px-8 py-3 text-lg rounded-xl w-full"
+                    >
+                      🏠 ポーカーホームに戻る
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
