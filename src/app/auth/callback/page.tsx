@@ -4,13 +4,21 @@ import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
+// プリレンダリングを無効化
+export const dynamic = 'force-dynamic'
+
 export default function AuthCallback() {
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
+        const supabase = createClient()
+        if (!supabase) {
+          router.push('/auth?error=supabase_config')
+          return
+        }
+
         const { data, error } = await supabase.auth.getSession()
         
         if (error) {
@@ -33,7 +41,7 @@ export default function AuthCallback() {
     }
 
     handleAuthCallback()
-  }, [router, supabase.auth])
+  }, [router])
 
   return (
     <div className="min-h-screen flex items-center justify-center">

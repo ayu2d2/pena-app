@@ -15,7 +15,8 @@ import {
   Bell,
   Settings,
   Sparkles,
-  ChevronDown
+  ChevronDown,
+  Spade
 } from 'lucide-react'
 
 interface NavItem {
@@ -51,6 +52,12 @@ export const MobileNav = ({ currentUser, onLogout }: MobileNavProps) => {
       icon: CalendarNav,
       badge: 3,
       gradient: 'from-green-500 to-blue-600'
+    },
+    { 
+      href: '/poker', 
+      label: 'ポーカー', 
+      icon: Spade,
+      gradient: 'from-purple-500 to-pink-600'
     },
     { 
       href: '/profile', 
@@ -281,6 +288,12 @@ export const DesktopNav = ({ currentUser, onLogout }: MobileNavProps) => {
       icon: CalendarNav,
       badge: 3,
       gradient: 'from-green-500 to-blue-600'
+    },
+    { 
+      href: '/poker', 
+      label: 'ポーカー', 
+      icon: Spade,
+      gradient: 'from-purple-500 to-pink-600'
     },
     { 
       href: '/profile', 

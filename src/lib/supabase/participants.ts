@@ -122,7 +122,7 @@ export class EventParticipationService {
 
       if (error) throw error
 
-      return data.map(item => ({
+      return data.map((item: any) => ({
         id: item.id,
         user_id: item.user_id,
         event_id: item.event_id,
@@ -151,7 +151,7 @@ export class EventParticipationService {
 
       if (error) throw error
 
-      return data.map(item => item.event_id)
+      return data.map((item: any) => item.event_id)
     } catch (error) {
       console.error('参加イベント取得エラー:', error)
       return []
@@ -183,7 +183,7 @@ export class EventParticipationService {
 
       const result: { [eventId: string]: ParticipantDetail[] } = {}
       
-      data.forEach(item => {
+      data.forEach((item: any) => {
         if (!result[item.event_id]) {
           result[item.event_id] = []
         }
@@ -228,7 +228,7 @@ export class NotificationService {
       if (error) throw error
 
       const result: { [eventId: string]: boolean } = {}
-      data.forEach(item => {
+      data.forEach((item: any) => {
         result[item.event_id] = item.enabled
       })
 
