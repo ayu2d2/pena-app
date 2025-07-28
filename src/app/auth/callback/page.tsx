@@ -23,6 +23,17 @@ function AuthCallbackContent() {
 
         // URLから認証コードを処理
         const code = searchParams.get('code')
+        const error = searchParams.get('error')
+        const errorDescription = searchParams.get('error_description')
+
+        // エラーがある場合
+        if (error) {
+          console.error('Authentication callback error:', error, errorDescription)
+          const errorMessage = errorDescription || error
+          router.push(`/auth?error=${encodeURIComponent(errorMessage)}`)
+          return
+        }
+
         if (code) {
           const { data, error } = await supabase.auth.exchangeCodeForSession(code)
           
@@ -33,20 +44,23 @@ function AuthCallbackContent() {
           }
 
           if (data.session) {
-            // セッション情報をローカルストレージに保存（デモ用）
+            // セッション情報をローカルストレージに保存
             const userInfo = {
               id: data.session.user.id,
               email: data.session.user.email,
               name: data.session.user.user_metadata?.name || data.session.user.email?.split('@')[0],
               display_name: data.session.user.user_metadata?.full_name || data.session.user.user_metadata?.name,
-              total_points: 1000 // 初期ポイント
+              total_points: 1000,
+              supabase_user: true
             }
             
             localStorage.setItem('penaapp_user', JSON.stringify(userInfo))
             localStorage.setItem('penaapp_session', JSON.stringify(data.session))
             
             console.log('Authentication successful, redirecting to dashboard')
-            router.push('/dashboard')
+            
+            // 成功メッセージと共にリダイレクト
+            router.push('/dashboard?welcome=true')
             return
           }
         }
@@ -61,20 +75,21 @@ function AuthCallbackContent() {
         }
 
         if (sessionData.session) {
-          // セッション情報をローカルストレージに保存（デモ用）
+          // セッション情報をローカルストレージに保存
           const userInfo = {
             id: sessionData.session.user.id,
             email: sessionData.session.user.email,
             name: sessionData.session.user.user_metadata?.name || sessionData.session.user.email?.split('@')[0],
             display_name: sessionData.session.user.user_metadata?.full_name || sessionData.session.user.user_metadata?.name,
-            total_points: 1000 // 初期ポイント
+            total_points: 1000,
+            supabase_user: true
           }
           
           localStorage.setItem('penaapp_user', JSON.stringify(userInfo))
           localStorage.setItem('penaapp_session', JSON.stringify(sessionData.session))
           
           console.log('Session found, redirecting to dashboard')
-          router.push('/dashboard')
+          router.push('/dashboard?welcome=true')
         } else {
           console.log('No session found, redirecting to auth')
           router.push('/auth')

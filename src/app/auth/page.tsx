@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react'
 import Link from 'next/link'
@@ -18,6 +18,7 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [formData, setFormData] = useState<AuthFormData>({
     email: '',
     password: '',
@@ -26,6 +27,36 @@ export default function AuthPage() {
   })
 
   const router = useRouter()
+
+  // URLパラメータからエラーメッセージを取得
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const errorParam = urlParams.get('error')
+    const welcomeParam = urlParams.get('welcome')
+    
+    if (errorParam) {
+      switch (errorParam) {
+        case 'supabase_config':
+          setError('Supabase設定に問題があります。デモモードで動作しています。')
+          break
+        case 'code_exchange_failed':
+          setError('認証コードの処理に失敗しました。もう一度お試しください。')
+          break
+        case 'session_error':
+          setError('セッションの取得に失敗しました。')
+          break
+        case 'unexpected_error':
+          setError('予期しないエラーが発生しました。')
+          break
+        default:
+          setError(decodeURIComponent(errorParam))
+      }
+    }
+    
+    if (welcomeParam) {
+      setSuccess('ログインが完了しました！')
+    }
+  }, [])
 
   const fallbackToDemo = () => {
     // デモモード: 簡単な検証のみ
@@ -89,7 +120,17 @@ export default function AuthPage() {
     setLoading(true)
 
     try {
-      // 実際のSupabase認証を試行し、失敗した場合はデモモードにフォールバック
+      // 環境変数の確認
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      
+      if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('your-project') || supabaseKey.includes('your-anon')) {
+        console.warn('Supabase環境変数が設定されていません。デモモードで動作します。')
+        fallbackToDemo()
+        return
+      }
+
+      // Supabase認証を試行
       const { createClient } = await import('@/lib/supabase/client')
       const supabase = createClient()
 
@@ -102,9 +143,17 @@ export default function AuthPage() {
           })
 
           if (authError) {
-            console.warn('Supabase login failed, falling back to demo mode:', authError.message)
-            // Supabase認証が失敗した場合、デモモードにフォールバック
-            fallbackToDemo()
+            // 具体的なエラーメッセージを表示
+            if (authError.message.includes('Invalid login credentials')) {
+              setError('メールアドレスまたはパスワードが正しくありません。')
+            } else if (authError.message.includes('Email not confirmed')) {
+              setError('メールアドレスの確認が完了していません。確認メールをチェックしてください。')
+            } else {
+              console.warn('Supabase login failed, falling back to demo mode:', authError.message)
+              fallbackToDemo()
+              return
+            }
+            setLoading(false)
             return
           }
 
@@ -115,11 +164,15 @@ export default function AuthPage() {
               email: data.session.user.email,
               name: data.session.user.user_metadata?.name || data.session.user.email?.split('@')[0],
               display_name: data.session.user.user_metadata?.full_name || data.session.user.user_metadata?.name,
-              total_points: 1000
+              total_points: 1000,
+              supabase_user: true // Supabaseユーザーフラグ
             }
             
             localStorage.setItem('penaapp_user', JSON.stringify(userInfo))
             localStorage.setItem('penaapp_session', JSON.stringify(data.session))
+            
+            // 成功メッセージ
+            setError('')
             router.push('/dashboard')
             return
           }
@@ -131,28 +184,50 @@ export default function AuthPage() {
             return
           }
 
+          if (!formData.displayName?.trim()) {
+            setError('表示名を入力してください。')
+            setLoading(false)
+            return
+          }
+
           const { data, error: authError } = await supabase.auth.signUp({
             email: formData.email,
             password: formData.password,
             options: {
               data: {
                 name: formData.displayName,
-                full_name: formData.displayName
-              }
+                full_name: formData.displayName,
+                display_name: formData.displayName
+              },
+              emailRedirectTo: `${window.location.origin}/auth/callback`
             }
           })
 
           if (authError) {
-            console.warn('Supabase signup failed, falling back to demo mode:', authError.message)
-            // Supabase認証が失敗した場合、デモモードにフォールバック
-            fallbackToDemo()
+            // 具体的なエラーメッセージを表示
+            if (authError.message.includes('User already registered')) {
+              setError('このメールアドレスは既に登録されています。ログインしてください。')
+            } else if (authError.message.includes('Password should be at least')) {
+              setError('パスワードは6文字以上で入力してください。')
+            } else {
+              console.warn('Supabase signup failed, falling back to demo mode:', authError.message)
+              fallbackToDemo()
+              return
+            }
+            setLoading(false)
             return
           }
 
           if (data.user) {
             // サインアップ成功
             setError('')
-            alert('アカウントが作成されました！確認メールをチェックしてください。')
+            if (data.user.email_confirmed_at) {
+              // 即座に確認された場合
+              alert('アカウントが作成されました！ログインしてください。')
+            } else {
+              // 確認メールが送信された場合
+              alert('アカウントが作成されました！確認メールをチェックして、リンクをクリックしてください。')
+            }
             setIsLogin(true)
             setLoading(false)
             return
@@ -161,6 +236,7 @@ export default function AuthPage() {
       }
 
       // Supabaseクライアントが利用できない場合、デモモードを使用
+      console.warn('Supabaseクライアントが利用できません。デモモードで動作します。')
       fallbackToDemo()
 
     } catch (error) {
@@ -280,6 +356,13 @@ export default function AuthPage() {
             {error && (
               <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-3 text-red-200 text-sm">
                 {error}
+              </div>
+            )}
+
+            {/* 成功メッセージ */}
+            {success && (
+              <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-3 text-green-200 text-sm">
+                {success}
               </div>
             )}
 

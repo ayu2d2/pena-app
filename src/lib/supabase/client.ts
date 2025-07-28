@@ -5,13 +5,29 @@ export function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
+  // 環境変数の検証
   if (!supabaseUrl || !supabaseAnonKey) {
-    // ビルド時やプリレンダリング時にはダミークライアントを返す
-    if (typeof window === 'undefined') {
-      return null as any
-    }
-    throw new Error('Supabase URL and Anon Key are required')
+    console.warn('Supabase環境変数が設定されていません')
+    return null
   }
 
-  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey)
+  // プレースホルダー値の検証
+  if (supabaseUrl.includes('your-project') || supabaseAnonKey.includes('your-anon')) {
+    console.warn('Supabase環境変数にプレースホルダー値が設定されています')
+    return null
+  }
+
+  try {
+    return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce'
+      }
+    })
+  } catch (error) {
+    console.error('Supabaseクライアントの作成に失敗しました:', error)
+    return null
+  }
 }
